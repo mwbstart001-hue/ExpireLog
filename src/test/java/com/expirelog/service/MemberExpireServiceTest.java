@@ -1,17 +1,10 @@
 package com.expirelog.service;
 
 import com.expirelog.entity.UserMember;
-import com.expirelog.mapper.MemberExpireLogMapper;
-import com.expirelog.mapper.MemberOrderMapper;
-import com.expirelog.mapper.UserMemberMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -23,37 +16,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class MemberExpireServiceTest {
+class MemberExpireServiceTest extends BaseIntegrationTest {
 
-    @Autowired
-    private MemberExpireService memberExpireService;
-
-    @Autowired
-    private MemberOrderMapper orderMapper;
-
-    @Autowired
-    private UserMemberMapper memberMapper;
-
-    @Autowired
-    private MemberExpireLogMapper expireLogMapper;
-
-    @Autowired
-    private PlatformTransactionManager transactionManager;
-
-    private TransactionTemplate transactionTemplate;
+    private long userId;
+    private long orderId;
 
     @BeforeEach
-    void setUp() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    void setupTestData() {
+        userId = nextUserId();
+        orderId = nextOrderId();
     }
 
     @Test
     void testSameOrderMultipleCalls_ShouldAddOnlyOnce() {
-        Long userId = 1L;
-        Long orderId = 100L;
         int durationDays = 30;
-
         LocalDateTime initialExpire = LocalDateTime.now().plusDays(10);
 
         transactionTemplate.execute(status -> {
@@ -81,10 +57,9 @@ class MemberExpireServiceTest {
 
     @Test
     void testMultipleOrders_ShouldAccumulateCorrectly() {
-        Long userId = 2L;
-        Long orderId1 = 201L;
-        Long orderId2 = 202L;
-        Long orderId3 = 203L;
+        long orderId1 = nextOrderId();
+        long orderId2 = nextOrderId();
+        long orderId3 = nextOrderId();
         int days1 = 30;
         int days2 = 60;
         int days3 = 90;
@@ -120,10 +95,7 @@ class MemberExpireServiceTest {
 
     @Test
     void testExpiredThenPurchase_ShouldStartFromNow() {
-        Long userId = 3L;
-        Long orderId = 300L;
         int durationDays = 30;
-
         LocalDateTime expiredTime = LocalDateTime.now().minusDays(10);
 
         transactionTemplate.execute(status -> {
@@ -147,8 +119,6 @@ class MemberExpireServiceTest {
 
     @Test
     void testFirstTimePurchase_ShouldCreateMemberRecord() {
-        Long userId = 5L;
-        Long orderId = 500L;
         int durationDays = 30;
 
         transactionTemplate.execute(status -> {
@@ -182,10 +152,7 @@ class MemberExpireServiceTest {
     @Test
     void testConcurrentCallbacks_ShouldNotCorruptExpireTime() throws InterruptedException {
         int threadCount = 10;
-        Long userId = 4L;
-        Long orderId = 400L;
         int durationDays = 30;
-
         LocalDateTime initialExpire = LocalDateTime.now().plusDays(10);
 
         transactionTemplate.execute(status -> {
@@ -228,7 +195,7 @@ class MemberExpireServiceTest {
                 "所有并发调用都应该成功返回，不应该抛出异常");
     }
 
-    private LocalDateTime getExpireTime(Long userId) {
+    private LocalDateTime getExpireTime(long userId) {
         return transactionTemplate.execute(status -> {
             UserMember member = memberMapper.selectByUserId(userId);
             return member != null ? member.getExpireTime() : null;

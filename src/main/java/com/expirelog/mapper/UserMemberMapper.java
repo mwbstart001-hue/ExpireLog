@@ -16,4 +16,6 @@ public interface UserMemberMapper {
     void updateExpireTime(@Param("userId") Long userId, @Param("expireTime") LocalDateTime expireTime);
 
     void insert(@Param("userId") Long userId, @Param("expireTime") LocalDateTime expireTime);
+
+    void deleteByUserId(@Param("userId") Long userId);
 }

@@ -13,4 +13,12 @@
         VALUES (#{userId}, #{changeDays}, #{orderId}, #{createdAt})
     </insert>
 
+    <delete id="deleteByOrderId">
+        DELETE FROM member_expire_log WHERE order_id = #{orderId}
+    </delete>
+
+    <delete id="deleteByUserId">
+        DELETE FROM member_expire_log WHERE user_id = #{userId}
+    </delete>
+
 </mapper>

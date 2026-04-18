@@ -31,4 +31,8 @@
         VALUES (#{userId}, #{expireTime})
     </insert>
 
+    <delete id="deleteByUserId">
+        DELETE FROM user_member WHERE user_id = #{userId}
+    </delete>
+
 </mapper>
