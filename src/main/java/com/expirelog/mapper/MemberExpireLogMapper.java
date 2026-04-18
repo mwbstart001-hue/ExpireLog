@@ -14,4 +14,8 @@ public interface MemberExpireLogMapper {
                 @Param("changeDays") Integer changeDays,
                 @Param("orderId") Long orderId,
                 @Param("createdAt") LocalDateTime createdAt);
+
+    void deleteByOrderId(@Param("orderId") Long orderId);
+
+    void deleteByUserId(@Param("userId") Long userId);
 }
