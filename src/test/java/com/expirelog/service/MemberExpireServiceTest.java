@@ -146,6 +146,40 @@ class MemberExpireServiceTest {
     }
 
     @Test
+    void testFirstTimePurchase_ShouldCreateMemberRecord() {
+        Long userId = 5L;
+        Long orderId = 500L;
+        int durationDays = 30;
+
+        transactionTemplate.execute(status -> {
+            orderMapper.insert(orderId, userId, durationDays, "PAID", LocalDateTime.now());
+            return null;
+        });
+
+        UserMember beforePurchase = transactionTemplate.execute(status ->
+                memberMapper.selectByUserId(userId)
+        );
+        assertNull(beforePurchase, "首次购买前用户没有会员记录");
+
+        LocalDateTime beforeCall = LocalDateTime.now();
+        memberExpireService.applyMemberExpire(orderId);
+        LocalDateTime afterCall = LocalDateTime.now();
+
+        UserMember afterPurchase = transactionTemplate.execute(status ->
+                memberMapper.selectByUserId(userId)
+        );
+        assertNotNull(afterPurchase, "首次购买后用户应有会员记录");
+        assertEquals(userId, afterPurchase.getUserId());
+
+        LocalDateTime expireTime = afterPurchase.getExpireTime();
+        LocalDateTime lowerBound = beforeCall.plusDays(durationDays).minusMinutes(1);
+        LocalDateTime upperBound = afterCall.plusDays(durationDays).plusMinutes(1);
+
+        assertTrue(expireTime.isAfter(lowerBound) && expireTime.isBefore(upperBound),
+                "首次购买的到期时间应该从当前时间开始计算");
+    }
+
+    @Test
     void testConcurrentCallbacks_ShouldNotCorruptExpireTime() throws InterruptedException {
         int threadCount = 10;
         Long userId = 4L;
