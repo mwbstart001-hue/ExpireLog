@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.expirelog.mapper.MemberExpireLogMapper">
+
+    <select id="existsByOrderId" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM member_expire_log
+        WHERE order_id = #{orderId}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO member_expire_log (user_id, change_days, order_id, created_at)
+        VALUES (#{userId}, #{changeDays}, #{orderId}, #{createdAt})
+    </insert>
+
+</mapper>
