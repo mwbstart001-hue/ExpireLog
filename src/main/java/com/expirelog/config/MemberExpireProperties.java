@@ -16,10 +16,6 @@ public class MemberExpireProperties {
         return strategy;
     }
 
-    public void setStrategy(String strategy) {
-        this.strategy = MemberAccumulationStrategy.fromString(strategy);
-    }
-
     public void setStrategy(MemberAccumulationStrategy strategy) {
         this.strategy = strategy;
     }
