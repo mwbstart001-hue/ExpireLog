@@ -59,7 +59,54 @@
 
 ---
 
-## 三、关于"过期后续费"的澄清
+## 三、会员叠加策略配置（v1.1.0 新增）
+
+### 3.1 概述
+
+为了支持营销活动的多样化玩法，系统提供三种可配置的会员时长叠加策略。通过 `application.properties` 配置切换，无需修改代码。
+
+### 3.2 配置项说明
+
+```properties
+member.expire.strategy=RESET
+member.expire.grace-days=7
+```
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `member.expire.strategy` | 枚举 | `RESET` | 叠加策略：`RESET`、`STRICT`、`GRACE` |
+| `member.expire.grace-days` | 整数 | `0` | 宽限期天数（仅 GRACE 策略生效） |
+
+### 3.3 三种策略详解
+
+| 策略 | 规则 | 适用场景 |
+|------|------|---------|
+| **RESET**（过期重置） | 未过期从原到期时间累加；已过期从当前时间开始 | 默认策略，常规会员续费 |
+| **STRICT**（严格累加） | 永远从原到期时间累加，不管是否过期 | 营销活动，过期后续费也能补回 |
+| **GRACE**（宽限期内累加） | 宽限期内从原到期时间；超出宽限期从当前时间 | 给用户一定的缓冲期 |
+
+### 3.4 场景对比示例
+
+**假设**：用户原到期时间 4月8日，4月18日续费30天，宽限期7天
+
+| 策略 | 原到期 | 当前时间 | 宽限期 | 基准时间 | 新到期时间 |
+|------|--------|---------|--------|---------|-----------|
+| RESET | 4月8日 | 4月18日 | - | **4月18日**（已过期） | 5月18日 |
+| STRICT | 4月8日 | 4月18日 | - | **4月8日** | 5月8日 |
+| GRACE | 4月8日 | 4月12日 | 7天 | **4月8日**（宽限期内） | 5月8日 |
+| GRACE | 4月8日 | 4月18日 | 7天 | **4月18日**（超出宽限期） | 5月18日 |
+
+### 3.5 业务场景建议
+
+| 场景 | 推荐策略 | 说明 |
+|------|---------|------|
+| 常规会员续费 | RESET（默认） | 过期后重新开始，合理 |
+| 促销活动（"过期也能续"） | STRICT | 吸引过期用户回归 |
+| 给用户缓冲期 | GRACE（graceDays=3~7） | 忘记续费的用户有补救机会 |
+
+---
+
+## 四、关于"过期后续费"的澄清
 
 ### 常见疑问
 
@@ -327,22 +374,25 @@ INFO: 处理会员权益订单完成, orderId=1001
 
 ---
 
-## 十三、代码位置速查
+## 十四、代码位置速查
 
 | 功能 | 文件位置 | 关键行 |
 |------|---------|--------|
 | 核心业务逻辑 | `service/MemberExpireService.java` | 全文件 |
-| 到期时间计算 | `service/MemberExpireService.java` | 85-86 |
-| 幂等性检查 | `service/MemberExpireService.java` | 56-59, 91-96 |
+| 到期时间计算策略 | `service/MemberExpireService.java` | 91-140 |
+| 策略枚举 | `enums/MemberAccumulationStrategy.java` | 全文件 |
+| 配置类 | `config/MemberExpireProperties.java` | 全文件 |
+| 幂等性检查 | `service/MemberExpireService.java` | 61-64, 72-77 |
 | 行锁查询 | `mapper/UserMemberMapper.xml` | 10-15 |
 | 唯一索引定义 | `resources/schema.sql` | 24 |
-| 测试用例 | `test/MemberExpireServiceTest.java` | 全文件 |
+| 集成测试 | `test/MemberExpireServiceTest.java` | 全文件 |
+| 策略单元测试 | `test/MemberExpireCalculateStrategyTest.java` | 全文件 |
 
 ---
 
-## 十四、故障排查指南
+## 十五、故障排查指南
 
-### 14.1 查看处理日志
+### 15.1 查看处理日志
 
 搜索关键字：`orderId=xxx`
 
@@ -352,7 +402,7 @@ INFO: 开始处理会员权益订单, orderId=1001
 INFO: 处理会员权益订单完成, orderId=1001
 ```
 
-### 14.2 检查流水记录
+### 15.2 检查流水记录
 
 ```sql
 SELECT * FROM member_expire_log WHERE order_id = 1001;
@@ -361,13 +411,13 @@ SELECT * FROM member_expire_log WHERE order_id = 1001;
 - 如果有记录：订单已处理过
 - 如果没有记录：订单未处理或处理失败
 
-### 14.3 检查用户会员状态
+### 15.3 检查用户会员状态
 
 ```sql
 SELECT * FROM user_member WHERE user_id = 123;
 ```
 
-### 14.4 常见问题
+### 15.4 常见问题
 
 | 问题 | 可能原因 | 解决方案 |
 |------|---------|---------|
@@ -377,9 +427,10 @@ SELECT * FROM user_member WHERE user_id = 123;
 
 ---
 
-## 十五、版本历史
+## 十六、版本历史
 
 | 版本 | 日期 | 修改内容 |
 |------|------|---------|
 | 1.0.0 | 2026-04-18 | 初始版本 |
 | 1.0.1 | 2026-04-18 | 修复首次购买时空指针异常；添加参数校验；添加日志记录；添加首次购买测试用例；添加设计文档 |
+| 1.1.0 | 2026-04-18 | 新增三种会员叠加策略（RESET/STRICT/GRACE）；抽取时间计算逻辑为独立方法；新增策略单元测试；更新配置和文档 |

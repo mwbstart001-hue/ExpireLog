@@ -1,7 +1,9 @@
 package com.expirelog.service;
 
+import com.expirelog.config.MemberExpireProperties;
 import com.expirelog.entity.MemberOrder;
 import com.expirelog.entity.UserMember;
+import com.expirelog.enums.MemberAccumulationStrategy;
 import com.expirelog.mapper.MemberExpireLogMapper;
 import com.expirelog.mapper.MemberOrderMapper;
 import com.expirelog.mapper.UserMemberMapper;
@@ -22,13 +24,16 @@ public class MemberExpireService {
     private final MemberOrderMapper orderMapper;
     private final MemberExpireLogMapper expireLogMapper;
     private final UserMemberMapper memberMapper;
+    private final MemberExpireProperties properties;
 
     public MemberExpireService(MemberOrderMapper orderMapper,
                                 MemberExpireLogMapper expireLogMapper,
-                                UserMemberMapper memberMapper) {
+                                UserMemberMapper memberMapper,
+                                MemberExpireProperties properties) {
         this.orderMapper = orderMapper;
         this.expireLogMapper = expireLogMapper;
         this.memberMapper = memberMapper;
+        this.properties = properties;
     }
 
     @Transactional
@@ -36,7 +41,7 @@ public class MemberExpireService {
 
         Assert.notNull(orderId, "orderId must not be null");
 
-        log.info("开始处理会员权益订单, orderId={}", orderId);
+        log.info("开始处理会员权益订单, orderId={}, strategy={}", orderId, properties.getStrategy());
 
         MemberOrder order = orderMapper.selectPaid(orderId);
         if (order == null) {
@@ -59,46 +64,77 @@ public class MemberExpireService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime baseTime;
-        LocalDateTime newExpire;
 
         UserMember member = memberMapper.selectForUpdate(userId);
 
+        LocalDateTime newExpire = calculateNewExpireTime(member, durationDays, now);
+
+        try {
+            expireLogMapper.insert(userId, durationDays, orderId, now);
+        } catch (DuplicateKeyException e) {
+            log.info("订单已被并发处理, orderId={}", orderId);
+            return;
+        }
+
         if (member == null) {
-            log.info("用户首次购买会员, userId={}", userId);
-            baseTime = now;
-            newExpire = baseTime.plusDays(durationDays);
-
-            try {
-                expireLogMapper.insert(userId, durationDays, orderId, now);
-            } catch (DuplicateKeyException e) {
-                log.info("订单已被并发处理, orderId={}", orderId);
-                return;
-            }
-
+            log.info("用户首次购买会员, userId={}, newExpire={}", userId, newExpire);
             memberMapper.insert(userId, newExpire);
-            log.info("用户首次购买会员完成, userId={}, newExpire={}", userId, newExpire);
         } else {
-            LocalDateTime oldExpire = member.getExpireTime();
-            log.info("用户当前会员到期时间: userId={}, oldExpire={}", userId, oldExpire);
-
-            baseTime = oldExpire.isAfter(now) ? oldExpire : now;
-            newExpire = baseTime.plusDays(durationDays);
-
-            log.info("到期时间计算: baseTime={} (max({}, {})), newExpire={}",
-                    baseTime, oldExpire, now, newExpire);
-
-            try {
-                expireLogMapper.insert(userId, durationDays, orderId, now);
-            } catch (DuplicateKeyException e) {
-                log.info("订单已被并发处理, orderId={}", orderId);
-                return;
-            }
-
+            log.info("更新会员到期时间: userId={}, oldExpire={}, newExpire={}",
+                    userId, member.getExpireTime(), newExpire);
             memberMapper.updateExpireTime(userId, newExpire);
-            log.info("会员到期时间更新完成, userId={}, newExpire={}", userId, newExpire);
         }
 
         log.info("处理会员权益订单完成, orderId={}", orderId);
+    }
+
+    public LocalDateTime calculateNewExpireTime(UserMember member, int durationDays, LocalDateTime now) {
+
+        if (member == null) {
+            return now.plusDays(durationDays);
+        }
+
+        LocalDateTime oldExpire = member.getExpireTime();
+        MemberAccumulationStrategy strategy = properties.getStrategy();
+
+        log.debug("计算到期时间: strategy={}, oldExpire={}, now={}, durationDays={}",
+                strategy, oldExpire, now, durationDays);
+
+        LocalDateTime baseTime;
+
+        switch (strategy) {
+            case STRICT:
+                baseTime = calculateBaseTimeStrict(oldExpire);
+                break;
+            case GRACE:
+                baseTime = calculateBaseTimeGrace(oldExpire, now, properties.getGraceDays());
+                break;
+            case RESET:
+            default:
+                baseTime = calculateBaseTimeReset(oldExpire, now);
+                break;
+        }
+
+        LocalDateTime newExpire = baseTime.plusDays(durationDays);
+        log.debug("计算结果: baseTime={}, newExpire={}", baseTime, newExpire);
+
+        return newExpire;
+    }
+
+    private LocalDateTime calculateBaseTimeStrict(LocalDateTime oldExpire) {
+        return oldExpire;
+    }
+
+    private LocalDateTime calculateBaseTimeGrace(LocalDateTime oldExpire, LocalDateTime now, int graceDays) {
+        LocalDateTime graceEndTime = oldExpire.plusDays(graceDays);
+        if (now.isBefore(graceEndTime) || now.isEqual(graceEndTime)) {
+            return oldExpire;
+        } else {
+            return now;
+        }
+    }
+
+    private LocalDateTime calculateBaseTimeReset(LocalDateTime oldExpire, LocalDateTime now) {
+        return oldExpire.isAfter(now) ? oldExpire : now;
     }
 }
