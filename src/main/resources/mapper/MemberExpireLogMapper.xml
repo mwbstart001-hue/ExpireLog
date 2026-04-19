@@ -2,6 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.expirelog.mapper.MemberExpireLogMapper">
 
+    <resultMap id="BaseResultMap" type="com.expirelog.entity.MemberExpireLog">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="change_days" property="changeDays"/>
+        <result column="order_id" property="orderId"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
     <select id="existsByOrderId" resultType="boolean">
         SELECT COUNT(*) > 0
         FROM member_expire_log
@@ -20,5 +28,25 @@
     <delete id="deleteByUserId">
         DELETE FROM member_expire_log WHERE user_id = #{userId}
     </delete>
+
+    <select id="selectByOrderId" resultMap="BaseResultMap">
+        SELECT id, user_id, change_days, order_id, created_at
+        FROM member_expire_log
+        WHERE order_id = #{orderId}
+    </select>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT id, user_id, change_days, order_id, created_at
+        FROM member_expire_log
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM member_expire_log
+        WHERE user_id = #{userId}
+    </select>
 
 </mapper>
