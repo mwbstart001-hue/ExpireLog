@@ -195,6 +195,78 @@ class MemberExpireServiceTest extends BaseIntegrationTest {
                 "所有并发调用都应该成功返回，不应该抛出异常");
     }
 
+    @Test
+    void testConcurrentDifferentOrders_SameUserFirstPurchase_ShouldBothSucceed() throws InterruptedException {
+        long orderId1 = nextOrderId();
+        long orderId2 = nextOrderId();
+        int days1 = 30;
+        int days2 = 60;
+
+        transactionTemplate.execute(status -> {
+            orderMapper.insert(orderId1, userId, days1, "PAID", LocalDateTime.now());
+            orderMapper.insert(orderId2, userId, days2, "PAID", LocalDateTime.now());
+            return null;
+        });
+
+        UserMember beforePurchase = transactionTemplate.execute(status ->
+                memberMapper.selectByUserId(userId)
+        );
+        assertNull(beforePurchase, "首次购买前用户没有会员记录");
+
+        int threadCount = 2;
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        executorService.submit(() -> {
+            try {
+                startLatch.await();
+                memberExpireService.applyMemberExpire(orderId1);
+                successCount.incrementAndGet();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                endLatch.countDown();
+            }
+        });
+
+        executorService.submit(() -> {
+            try {
+                startLatch.await();
+                memberExpireService.applyMemberExpire(orderId2);
+                successCount.incrementAndGet();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                endLatch.countDown();
+            }
+        });
+
+        LocalDateTime beforeCall = LocalDateTime.now();
+        startLatch.countDown();
+        endLatch.await();
+        executorService.shutdown();
+        LocalDateTime afterCall = LocalDateTime.now();
+
+        assertEquals(2, successCount.get(), "两个订单都应该成功处理");
+
+        UserMember afterPurchase = transactionTemplate.execute(status ->
+                memberMapper.selectByUserId(userId)
+        );
+        assertNotNull(afterPurchase, "购买后用户应有会员记录");
+
+        int logCount = expireLogMapper.countByUserId(userId);
+        assertEquals(2, logCount, "应该有两条流水记录");
+
+        LocalDateTime expireTime = afterPurchase.getExpireTime();
+        LocalDateTime lowerBound = beforeCall.plusDays(days1 + days2).minusMinutes(1);
+        LocalDateTime upperBound = afterCall.plusDays(days1 + days2).plusMinutes(1);
+
+        assertTrue(expireTime.isAfter(lowerBound) && expireTime.isBefore(upperBound),
+                "并发处理不同订单时，到期时间应该累加两个订单的天数");
+    }
+
     private LocalDateTime getExpireTime(long userId) {
         return transactionTemplate.execute(status -> {
             UserMember member = memberMapper.selectByUserId(userId);
