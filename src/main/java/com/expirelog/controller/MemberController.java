@@ -1,8 +1,8 @@
 package com.expirelog.controller;
 
+import com.expirelog.dto.MemberExpireLogDTO;
 import com.expirelog.dto.PageResult;
-import com.expirelog.entity.MemberExpireLog;
-import com.expirelog.entity.UserMember;
+import com.expirelog.dto.UserMemberDTO;
 import com.expirelog.service.MemberExpireLogService;
 import com.expirelog.service.MemberExpireService;
 import org.springframework.web.bind.annotation.*;
@@ -27,12 +27,12 @@ public class MemberController {
     }
 
     @GetMapping("/{userId}")
-    public UserMember getMemberInfo(@PathVariable Long userId) {
+    public UserMemberDTO getMemberInfo(@PathVariable Long userId) {
         return memberExpireService.getMemberInfo(userId);
     }
 
     @GetMapping("/{userId}/logs")
-    public PageResult<MemberExpireLog> getMemberLogs(
+    public PageResult<MemberExpireLogDTO> getMemberLogs(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -40,7 +40,7 @@ public class MemberController {
     }
 
     @GetMapping("/logs/order/{orderId}")
-    public MemberExpireLog getLogByOrderId(@PathVariable Long orderId) {
+    public MemberExpireLogDTO getLogByOrderId(@PathVariable Long orderId) {
         return memberExpireLogService.getByOrderId(orderId);
     }
 }

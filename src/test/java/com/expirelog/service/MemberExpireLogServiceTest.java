@@ -1,7 +1,7 @@
 package com.expirelog.service;
 
+import com.expirelog.dto.MemberExpireLogDTO;
 import com.expirelog.dto.PageResult;
-import com.expirelog.entity.MemberExpireLog;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("按订单 ID 查询流水：存在的订单")
     void testGetByOrderId_ExistingOrder() {
-        MemberExpireLog log = memberExpireLogService.getByOrderId(orderId1);
+        MemberExpireLogDTO log = memberExpireLogService.getByOrderId(orderId1);
 
         assertNotNull(log);
         assertEquals(userId, log.getUserId());
@@ -64,7 +64,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     void testGetByOrderId_NonExistingOrder() {
         long nonExistingOrderId = nextOrderId() + 10000;
 
-        MemberExpireLog log = memberExpireLogService.getByOrderId(nonExistingOrderId);
+        MemberExpireLogDTO log = memberExpireLogService.getByOrderId(nonExistingOrderId);
 
         assertNull(log);
     }
@@ -72,7 +72,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("按用户 ID 查询流水：第一页")
     void testGetByUserId_FirstPage() {
-        PageResult<MemberExpireLog> result = memberExpireLogService.getByUserId(userId, 1, 10);
+        PageResult<MemberExpireLogDTO> result = memberExpireLogService.getByUserId(userId, 1, 10);
 
         assertNotNull(result);
         assertEquals(3, result.getTotal());
@@ -81,7 +81,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
         assertEquals(1, result.getTotalPages());
         assertEquals(3, result.getData().size());
 
-        List<MemberExpireLog> logs = result.getData();
+        List<MemberExpireLogDTO> logs = result.getData();
         assertEquals(orderId3, logs.get(0).getOrderId());
         assertEquals(orderId2, logs.get(1).getOrderId());
         assertEquals(orderId1, logs.get(2).getOrderId());
@@ -90,7 +90,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("按用户 ID 查询流水：分页逻辑")
     void testGetByUserId_Pagination() {
-        PageResult<MemberExpireLog> page1 = memberExpireLogService.getByUserId(userId, 1, 2);
+        PageResult<MemberExpireLogDTO> page1 = memberExpireLogService.getByUserId(userId, 1, 2);
 
         assertEquals(3, page1.getTotal());
         assertEquals(1, page1.getPage());
@@ -98,7 +98,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
         assertEquals(2, page1.getTotalPages());
         assertEquals(2, page1.getData().size());
 
-        PageResult<MemberExpireLog> page2 = memberExpireLogService.getByUserId(userId, 2, 2);
+        PageResult<MemberExpireLogDTO> page2 = memberExpireLogService.getByUserId(userId, 2, 2);
 
         assertEquals(3, page2.getTotal());
         assertEquals(2, page2.getPage());
@@ -114,7 +114,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("按用户 ID 查询流水：页面大小限制 100")
     void testGetByUserId_PageSizeLimit() {
-        PageResult<MemberExpireLog> result = memberExpireLogService.getByUserId(userId, 1, 200);
+        PageResult<MemberExpireLogDTO> result = memberExpireLogService.getByUserId(userId, 1, 200);
 
         assertNotNull(result);
         assertEquals(100, result.getSize());
@@ -123,7 +123,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("按用户 ID 查询流水：无效页面大小使用默认值")
     void testGetByUserId_InvalidPageSize() {
-        PageResult<MemberExpireLog> result = memberExpireLogService.getByUserId(userId, 1, -5);
+        PageResult<MemberExpireLogDTO> result = memberExpireLogService.getByUserId(userId, 1, -5);
 
         assertNotNull(result);
         assertEquals(20, result.getSize());
@@ -132,7 +132,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("按用户 ID 查询流水：无效页码从第一页开始")
     void testGetByUserId_InvalidPage() {
-        PageResult<MemberExpireLog> result = memberExpireLogService.getByUserId(userId, -1, 10);
+        PageResult<MemberExpireLogDTO> result = memberExpireLogService.getByUserId(userId, -1, 10);
 
         assertNotNull(result);
         assertEquals(1, result.getPage());
@@ -143,7 +143,7 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     void testGetByUserId_NoData() {
         long nonExistingUserId = nextUserId() + 10000;
 
-        PageResult<MemberExpireLog> result = memberExpireLogService.getByUserId(nonExistingUserId, 1, 10);
+        PageResult<MemberExpireLogDTO> result = memberExpireLogService.getByUserId(nonExistingUserId, 1, 10);
 
         assertNotNull(result);
         assertEquals(0, result.getTotal());
@@ -153,14 +153,14 @@ class MemberExpireLogServiceTest extends BaseIntegrationTest {
     @Test
     @DisplayName("流水记录排序：按创建时间倒序")
     void testGetByUserId_OrderByCreatedAtDesc() {
-        PageResult<MemberExpireLog> result = memberExpireLogService.getByUserId(userId, 1, 10);
+        PageResult<MemberExpireLogDTO> result = memberExpireLogService.getByUserId(userId, 1, 10);
 
-        List<MemberExpireLog> logs = result.getData();
+        List<MemberExpireLogDTO> logs = result.getData();
         assertEquals(3, logs.size());
 
         for (int i = 1; i < logs.size(); i++) {
-            MemberExpireLog current = logs.get(i - 1);
-            MemberExpireLog next = logs.get(i);
+            MemberExpireLogDTO current = logs.get(i - 1);
+            MemberExpireLogDTO next = logs.get(i);
             assertTrue(current.getCreatedAt().isAfter(next.getCreatedAt()) ||
                     current.getCreatedAt().isEqual(next.getCreatedAt()));
         }

@@ -1,6 +1,7 @@
 package com.expirelog.service;
 
 import com.expirelog.config.MemberExpireProperties;
+import com.expirelog.dto.UserMemberDTO;
 import com.expirelog.entity.MemberOrder;
 import com.expirelog.entity.UserMember;
 import com.expirelog.enums.MemberAccumulationStrategy;
@@ -104,8 +105,19 @@ public class MemberExpireService {
         log.info("处理会员权益订单完成, orderId={}", orderId);
     }
 
-    public UserMember getMemberInfo(Long userId) {
-        return memberMapper.selectByUserId(userId);
+    public UserMemberDTO getMemberInfo(Long userId) {
+        UserMember entity = memberMapper.selectByUserId(userId);
+        return toDTO(entity);
+    }
+
+    private UserMemberDTO toDTO(UserMember entity) {
+        if (entity == null) {
+            return null;
+        }
+        UserMemberDTO dto = new UserMemberDTO();
+        dto.setUserId(entity.getUserId());
+        dto.setExpireTime(entity.getExpireTime());
+        return dto;
     }
 
     private LocalDateTime calculateNewExpireTimeInternal(UserMember member, int durationDays, LocalDateTime now) {

@@ -1,5 +1,6 @@
 package com.expirelog.service;
 
+import com.expirelog.dto.MemberExpireLogDTO;
 import com.expirelog.dto.PageResult;
 import com.expirelog.entity.MemberExpireLog;
 import com.expirelog.mapper.MemberExpireLogMapper;
@@ -8,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class MemberExpireLogService {
@@ -23,15 +25,16 @@ public class MemberExpireLogService {
         this.expireLogMapper = expireLogMapper;
     }
 
-    public MemberExpireLog getByOrderId(Long orderId) {
+    public MemberExpireLogDTO getByOrderId(Long orderId) {
         log.debug("查询订单流水: orderId={}", orderId);
         if (orderId == null) {
             return null;
         }
-        return expireLogMapper.selectByOrderId(orderId);
+        MemberExpireLog entity = expireLogMapper.selectByOrderId(orderId);
+        return toDTO(entity);
     }
 
-    public PageResult<MemberExpireLog> getByUserId(Long userId, int page, int size) {
+    public PageResult<MemberExpireLogDTO> getByUserId(Long userId, int page, int size) {
         log.debug("查询用户流水: userId={}, page={}, size={}", userId, page, size);
 
         if (userId == null) {
@@ -47,7 +50,24 @@ public class MemberExpireLogService {
 
         log.debug("查询用户流水结果: userId={}, total={}, count={}", userId, total, logs.size());
 
-        return new PageResult<>(logs, total, validPage, validSize);
+        List<MemberExpireLogDTO> dtos = logs.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+
+        return new PageResult<>(dtos, total, validPage, validSize);
+    }
+
+    private MemberExpireLogDTO toDTO(MemberExpireLog entity) {
+        if (entity == null) {
+            return null;
+        }
+        MemberExpireLogDTO dto = new MemberExpireLogDTO();
+        dto.setId(entity.getId());
+        dto.setUserId(entity.getUserId());
+        dto.setChangeDays(entity.getChangeDays());
+        dto.setOrderId(entity.getOrderId());
+        dto.setCreatedAt(entity.getCreatedAt());
+        return dto;
     }
 
     private int normalizeSize(int size) {

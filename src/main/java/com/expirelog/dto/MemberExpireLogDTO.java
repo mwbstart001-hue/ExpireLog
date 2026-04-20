@@ -1,11 +1,11 @@
-package com.expirelog.entity;
+package com.expirelog.dto;
 
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
-public class MemberExpireLog {
+public class MemberExpireLogDTO {
 
     private Long id;
     private Long userId;
