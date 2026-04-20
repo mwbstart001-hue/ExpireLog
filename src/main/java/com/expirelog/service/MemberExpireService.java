@@ -131,11 +131,6 @@ public class MemberExpireService {
 
             log.info("订单信息: orderId={}, userId={}, durationDays={}", orderId, userId, durationDays);
 
-            if (expireLogMapper.existsByOrderId(orderId)) {
-                log.info("订单已处理过, 跳过, orderId={}", orderId);
-                return ApplyResult.alreadyProcessed();
-            }
-
             LocalDateTime now = LocalDateTime.now();
 
             memberMapper.ensureExists(userId, now);
@@ -147,7 +142,7 @@ public class MemberExpireService {
             try {
                 expireLogMapper.insert(userId, durationDays, orderId, now);
             } catch (DuplicateKeyException e) {
-                log.info("订单已被并发处理, orderId={}", orderId);
+                log.info("订单已处理过, 跳过, orderId={}", orderId);
                 return ApplyResult.alreadyProcessed();
             }
 
