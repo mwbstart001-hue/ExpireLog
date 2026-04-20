@@ -424,6 +424,7 @@ SELECT * FROM user_member WHERE user_id = 123;
 | 订单处理后到期时间未变 | 订单已处理过（重复调用） | 检查 `member_expire_log` 表 |
 | 首次购买报错 | 空指针异常（已修复） | 确认使用最新代码 |
 | 并发场景数据错乱 | 缺少行锁 | 确认 SQL 包含 `FOR UPDATE` |
+| 同一用户不同订单并发处理时其中一个丢失 | 首次购买时的竞态窗口（已修复） | 确认使用包含 `ensureExists` 的版本 |
 
 ---
 
@@ -435,6 +436,130 @@ SELECT * FROM user_member WHERE user_id = 123;
 | 1.0.1 | 2026-04-18 | 修复首次购买时空指针异常；添加参数校验；添加日志记录；添加首次购买测试用例；添加设计文档 |
 | 1.1.0 | 2026-04-18 | 新增三种会员叠加策略（RESET/STRICT/GRACE）；抽取时间计算逻辑为独立方法；新增策略单元测试；更新配置和文档 |
 | 1.2.0 | 2026-04-19 | 新增会员流水查询接口；新增分页查询能力；新增 MemberExpireLogService；补充集成测试 |
+| 1.2.1 | 2026-04-20 | 修复首次购买时的竞态窗口问题；添加 ensureExists 确保行锁可用；新增并发测试用例 |
+
+---
+
+## 十六、竞态窗口问题分析与修复
+
+### 16.1 问题背景
+
+在 **v1.2.0 及之前**，首次购买会员时存在竞态窗口问题，可能导致同一用户的不同订单并发处理时，其中一个订单被丢失。
+
+### 16.2 问题场景
+
+**触发条件**：
+- 用户首次购买会员（`user_member` 表无记录）
+- 同一用户有两个不同的订单几乎同时被处理
+
+**竞态时序**：
+```
+线程 A（处理 order1）              线程 B（处理 order2）
+─────────────────────────────────────────────────────────
+1. existsByOrderId(order1) → false
+                                  2. existsByOrderId(order2) → false
+3. 开启事务
+4. selectForUpdate(userId) → null
+   (用户不存在，无法加行锁)
+                                  5. 开启事务
+                                  6. selectForUpdate(userId) → null
+                                     (同样无法加锁)
+7. 插入流水 order1 ✅
+                                  8. 插入流水 order2 ✅
+9. 插入 user_member ✅
+                                  10. 插入 user_member → 主键冲突！❌
+                                      事务回滚 → order2 丢失！
+```
+
+### 16.3 根本原因
+
+1. **幂等检查在事务外**：`existsByOrderId` 和实际插入之间有时间窗口
+2. **首次购买无法加锁**：`SELECT ... FOR UPDATE` 对不存在的行无法加锁
+3. **两个独立订单**：同一用户的不同订单都能通过幂等检查
+
+### 16.4 解决方案
+
+使用 **"先确保记录存在，再加锁计算"** 的策略：
+
+**修复前**：
+```java
+UserMember member = memberMapper.selectForUpdate(userId);
+if (member == null) {
+    memberMapper.insert(userId, newExpire);  // 竞态风险！
+} else {
+    memberMapper.updateExpireTime(userId, newExpire);
+}
+```
+
+**修复后**：
+```java
+// 第一步：确保记录存在（用 INSERT ... ON CONFLICT DO NOTHING）
+memberMapper.ensureExists(userId, now);
+
+// 第二步：现在记录一定存在，可以加锁
+UserMember member = memberMapper.selectForUpdate(userId);
+
+// 第三步：计算并更新（统一用 update，因为记录一定存在）
+LocalDateTime newExpire = calculateNewExpireTimeInternal(member, durationDays, now);
+memberMapper.updateExpireTime(userId, newExpire);
+```
+
+### 16.5 关键实现
+
+**Mapper SQL**（PostgreSQL）：
+```sql
+INSERT INTO user_member (user_id, expire_time)
+VALUES (#{userId}, #{defaultExpireTime})
+ON CONFLICT (user_id) DO NOTHING
+```
+
+**`ensureExists` 的默认值**：使用 `now` 而非 `LocalDateTime.MIN`
+
+原因：
+- **RESET 策略**：`max(now, oldExpire)` → 如果用 `MIN` 则返回 `now` ✅
+- **STRICT 策略**：直接返回 `oldExpire` → 如果用 `MIN` 则返回 `MIN` ❌
+- **GRACE 策略**：宽限期内返回 `oldExpire` → 如果用 `MIN` 则可能错误 ❌
+
+使用 `now` 作为默认值，所有策略在首次购买时都能正确返回 `now`。
+
+### 16.6 修复后的时序
+
+```
+线程 A（处理 order1）              线程 B（处理 order2）
+─────────────────────────────────────────────────────────
+1. existsByOrderId(order1) → false
+                                  2. existsByOrderId(order2) → false
+3. 开启事务
+4. ensureExists(userId, now)
+   → 用户不存在，插入记录 ✅
+                                  5. 开启事务
+                                  6. ensureExists(userId, now)
+                                     → 用户已存在，不做操作 ✅
+7. selectForUpdate(userId)
+   → 获取行锁，读取记录 ✅
+                                  8. selectForUpdate(userId)
+                                     → 等待行锁...
+9. 计算 newExpire
+10. 插入流水 order1
+11. 更新 user_member
+12. 提交事务 → 释放行锁
+                                  13. 获取行锁，读取更新后的记录 ✅
+                                  14. 计算 newExpire（基于最新值）
+                                  15. 插入流水 order2
+                                  16. 更新 user_member
+                                  17. 提交事务
+
+结果：两个订单都成功处理，到期时间累加正确 ✅
+```
+
+### 16.7 测试用例
+
+新增测试：`testConcurrentDifferentOrders_SameUserFirstPurchase_ShouldBothSucceed`
+
+验证：
+- 同一用户首次购买
+- 两个不同订单并发处理
+- 预期：两个订单都成功，流水记录 2 条，到期时间累加正确
 
 ---
 

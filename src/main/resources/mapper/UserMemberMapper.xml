@@ -35,4 +35,10 @@
         DELETE FROM user_member WHERE user_id = #{userId}
     </delete>
 
+    <insert id="ensureExists">
+        INSERT INTO user_member (user_id, expire_time)
+        VALUES (#{userId}, #{defaultExpireTime})
+        ON CONFLICT (user_id) DO NOTHING
+    </insert>
+
 </mapper>

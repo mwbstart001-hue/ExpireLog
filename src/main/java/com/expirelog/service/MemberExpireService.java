@@ -84,6 +84,8 @@ public class MemberExpireService {
 
         LocalDateTime now = LocalDateTime.now();
 
+        memberMapper.ensureExists(userId, now);
+
         UserMember member = memberMapper.selectForUpdate(userId);
 
         LocalDateTime newExpire = calculateNewExpireTimeInternal(member, durationDays, now);
@@ -95,14 +97,9 @@ public class MemberExpireService {
             return;
         }
 
-        if (member == null) {
-            log.info("用户首次购买会员, userId={}, newExpire={}", userId, newExpire);
-            memberMapper.insert(userId, newExpire);
-        } else {
-            log.info("更新会员到期时间: userId={}, oldExpire={}, newExpire={}",
-                    userId, member.getExpireTime(), newExpire);
-            memberMapper.updateExpireTime(userId, newExpire);
-        }
+        log.info("更新会员到期时间: userId={}, oldExpire={}, newExpire={}",
+                userId, member.getExpireTime(), newExpire);
+        memberMapper.updateExpireTime(userId, newExpire);
 
         log.info("处理会员权益订单完成, orderId={}", orderId);
     }
@@ -112,10 +109,6 @@ public class MemberExpireService {
     }
 
     private LocalDateTime calculateNewExpireTimeInternal(UserMember member, int durationDays, LocalDateTime now) {
-
-        if (member == null) {
-            return now.plusDays(durationDays);
-        }
 
         LocalDateTime oldExpire = member.getExpireTime();
         MemberAccumulationStrategy strategyType = properties.getStrategy();
