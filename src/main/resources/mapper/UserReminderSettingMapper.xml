@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.expirelog.mapper.UserReminderSettingMapper">
+
+    <resultMap id="BaseResultMap" type="com.expirelog.entity.UserReminderSetting">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="enabled" property="enabled"/>
+        <result column="channels" property="channels"/>
+        <result column="days_before_expire" property="daysBeforeExpire"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO user_reminder_setting (user_id, enabled, channels, days_before_expire, updated_at)
+        VALUES (#{userId}, #{enabled}, #{channels}, #{daysBeforeExpire}, NOW())
+    </insert>
+
+    <update id="update">
+        UPDATE user_reminder_setting
+        SET enabled = #{enabled},
+            channels = #{channels},
+            days_before_expire = #{daysBeforeExpire},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT id, user_id, enabled, channels, days_before_expire, created_at, updated_at
+        FROM user_reminder_setting
+        WHERE user_id = #{userId}
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO user_reminder_setting (user_id, enabled, channels, days_before_expire, updated_at)
+        VALUES (#{userId}, #{enabled}, #{channels}, #{daysBeforeExpire}, NOW())
+        ON CONFLICT (user_id) DO UPDATE SET
+            enabled = EXCLUDED.enabled,
+            channels = EXCLUDED.channels,
+            days_before_expire = EXCLUDED.days_before_expire,
+            updated_at = EXCLUDED.updated_at
+    </insert>
+
+</mapper>

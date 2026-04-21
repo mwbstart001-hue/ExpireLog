@@ -41,4 +41,20 @@
         ON CONFLICT (user_id) DO NOTHING
     </insert>
 
+    <select id="selectExpiringUsers" resultMap="BaseResultMap">
+        SELECT user_id, expire_time
+        FROM user_member
+        WHERE expire_time >= #{fromTime}
+          AND expire_time <= #{toTime}
+        ORDER BY expire_time ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countExpiringUsers" resultType="int">
+        SELECT COUNT(*)
+        FROM user_member
+        WHERE expire_time >= #{fromTime}
+          AND expire_time <= #{toTime}
+    </select>
+
 </mapper>
