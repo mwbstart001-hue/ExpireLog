@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface UserMemberMapper {
@@ -20,4 +21,12 @@ public interface UserMemberMapper {
     void deleteByUserId(@Param("userId") Long userId);
 
     void ensureExists(@Param("userId") Long userId, @Param("defaultExpireTime") LocalDateTime defaultExpireTime);
+
+    List<UserMember> selectExpiringUsers(@Param("fromTime") LocalDateTime fromTime,
+                                           @Param("toTime") LocalDateTime toTime,
+                                           @Param("offset") int offset,
+                                           @Param("limit") int limit);
+
+    int countExpiringUsers(@Param("fromTime") LocalDateTime fromTime,
+                            @Param("toTime") LocalDateTime toTime);
 }
